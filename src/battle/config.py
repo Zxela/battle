@@ -29,6 +29,21 @@ class Config:
     def _save(self):
         self._path.write_text(json.dumps(self._data, indent=2))
 
+    def _resolve_plugin_source(self, repo_dir: Path, name: str) -> str:
+        """Read .claude-plugin/marketplace.json and resolve the plugin source directory."""
+        marketplace_path = repo_dir / ".claude-plugin" / "marketplace.json"
+        if marketplace_path.exists():
+            try:
+                marketplace = json.loads(marketplace_path.read_text())
+                for plugin in marketplace.get("plugins", []):
+                    if plugin.get("name") == name or True:  # take first match
+                        source = plugin.get("source", "./").rstrip("/")
+                        resolved = (repo_dir / source).resolve()
+                        return str(resolved)
+            except (json.JSONDecodeError, KeyError):
+                pass
+        return str(repo_dir)
+
     def _clone_or_pull(self, name: str, repo: str) -> str:
         """Clone owner/repo to ~/.battle/plugins/<name>/, or pull if already cloned."""
         plugins_dir = self._home / "plugins"
@@ -39,7 +54,7 @@ class Config:
         else:
             url = f"https://github.com/{repo}.git"
             subprocess.run(["git", "clone", url, str(dest)], check=True)
-        return str(dest)
+        return self._resolve_plugin_source(dest, name)
 
     def register(self, name: str, path: str) -> None:
         if _is_github_shorthand(path):

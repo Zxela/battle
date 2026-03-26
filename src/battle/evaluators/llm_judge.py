@@ -1,9 +1,23 @@
 import json
+import os
 from dataclasses import dataclass
 
 import anthropic
 
-anthropic_client = anthropic.Anthropic()
+_anthropic_client: anthropic.Anthropic | None = None
+
+
+def _client() -> anthropic.Anthropic:
+    global _anthropic_client
+    if _anthropic_client is None:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY environment variable is not set. "
+                "Export it before running battle."
+            )
+        _anthropic_client = anthropic.Anthropic(api_key=api_key)
+    return _anthropic_client
 
 JUDGE_PROMPT = """\
 You are an expert code reviewer evaluating AI-generated code. Score the output on each dimension from 1 (very poor) to 10 (excellent).
@@ -74,7 +88,7 @@ def score_cell(
     criteria_text = "\n".join(f"- {c}" for c in acceptance_criteria)
     prompt = JUDGE_PROMPT.format(criteria=criteria_text, code_summary=code_summary)
 
-    response = anthropic_client.messages.create(
+    response = _client().messages.create(
         model=judge_model,
         max_tokens=1024,
         messages=[{"role": "user", "content": prompt}],

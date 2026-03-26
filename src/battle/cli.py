@@ -126,7 +126,7 @@ def main() -> None:
     run_p.add_argument("--plugins", required=True, help="Comma-separated plugin names or paths")
     run_p.add_argument("--models", default="claude-sonnet-4-6", help="Comma-separated model IDs")
     run_p.add_argument("--test", default="spa", help="Test template name (spa, mobile, tooling)")
-    run_p.add_argument("--runs", type=int, default=3, help="Runs per cell (default: 3)")
+    run_p.add_argument("--runs", type=int, default=1, help="Runs per cell (default: 1)")
     run_p.add_argument("--judge-model", default="claude-opus-4-6", help="Model used as judge")
     run_p.add_argument("--output", default="all", help="Output formats: terminal,html,json or all")
 
@@ -134,7 +134,7 @@ def main() -> None:
     parser.add_argument("--plugins", help="Comma-separated plugin names or paths (shorthand for 'battle run')")
     parser.add_argument("--models", help=argparse.SUPPRESS)
     parser.add_argument("--test", help=argparse.SUPPRESS, default="spa")
-    parser.add_argument("--runs", type=int, help=argparse.SUPPRESS, default=3)
+    parser.add_argument("--runs", type=int, help=argparse.SUPPRESS, default=1)
     parser.add_argument("--judge-model", help=argparse.SUPPRESS, default="claude-opus-4-6")
     parser.add_argument("--output", help=argparse.SUPPRESS, default="all")
 

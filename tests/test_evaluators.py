@@ -23,8 +23,9 @@ def test_score_cell_returns_rubric_score():
         "rationale": "Good overall implementation"
     }""")
 
-    with patch("battle.evaluators.llm_judge.anthropic_client") as mock_client:
-        mock_client.messages.create.return_value = mock_response
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_response
+    with patch("battle.evaluators.llm_judge._client", return_value=mock_client):
         score = score_cell(
             artifact_files={"index.tsx": "export default function App() {}"},
             acceptance_criteria=["App renders without errors"],
@@ -41,8 +42,9 @@ def test_score_cell_handles_empty_artifacts():
         "ac_completeness": 1, "code_style": 1, "code_quality": 1,
         "security": 1, "bugs": 1, "rationale": "No code produced"
     }""")
-    with patch("battle.evaluators.llm_judge.anthropic_client") as mock_client:
-        mock_client.messages.create.return_value = mock_response
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_response
+    with patch("battle.evaluators.llm_judge._client", return_value=mock_client):
         score = score_cell(
             artifact_files={},
             acceptance_criteria=["Build completes"],
@@ -63,8 +65,9 @@ def test_score_cell_strips_markdown_fences():
 }
 ```"""
     mock_response = make_mock_anthropic_response(json_in_fences)
-    with patch("battle.evaluators.llm_judge.anthropic_client") as mock_client:
-        mock_client.messages.create.return_value = mock_response
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_response
+    with patch("battle.evaluators.llm_judge._client", return_value=mock_client):
         score = score_cell(
             artifact_files={"app.py": "print('hello')"},
             acceptance_criteria=["Runs without errors"],
