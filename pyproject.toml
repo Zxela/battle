@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "battle"
+version = "0.1.0"
+description = "Benchmark Claude Code plugins head-to-head"
+requires-python = ">=3.11"
+dependencies = [
+    "claude-agent-sdk>=0.1.50",
+    "anthropic>=0.50.0",
+    "rich>=13.0.0",
+    "anyio>=4.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0", "pytest-asyncio>=0.23.0"]
+
+[project.scripts]
+battle = "battle.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/battle"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
