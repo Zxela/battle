@@ -78,3 +78,66 @@ def test_rubric_score_overall():
         rationale="test"
     )
     assert score.overall == pytest.approx(8.0, rel=0.01)
+
+
+# --- Static analysis tests (append to existing test_evaluators.py) ---
+import subprocess
+from unittest.mock import MagicMock
+from battle.evaluators.static import StaticResult, run_eslint
+
+
+def test_run_eslint_no_js_files_returns_not_ran(tmp_path):
+    # No JS files → ran=False, zero counts
+    result = run_eslint(artifact_dir=str(tmp_path))
+    assert result.error_count == 0
+    assert result.warning_count == 0
+    assert result.ran is False
+
+
+def test_run_eslint_parses_json_output(tmp_path, monkeypatch):
+    # Write a JS file so eslint is attempted
+    (tmp_path / "index.js").write_text("var x = 1\n")
+
+    mock_output = '[{"filePath":"index.js","messages":[{"severity":2,"message":"no-var"}],"errorCount":1,"warningCount":0}]'
+
+    def fake_run(cmd, *args, **kwargs):
+        result = MagicMock()
+        result.stdout = mock_output
+        result.returncode = 1
+        return result
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = run_eslint(artifact_dir=str(tmp_path))
+    assert result.error_count == 1
+    assert result.warning_count == 0
+    assert result.ran is True
+
+
+def test_run_eslint_handles_timeout(tmp_path, monkeypatch):
+    (tmp_path / "index.ts").write_text("const x = 1;")
+
+    def fake_run_timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(cmd="npx", timeout=60)
+
+    monkeypatch.setattr(subprocess, "run", fake_run_timeout)
+    result = run_eslint(artifact_dir=str(tmp_path))
+    assert result.ran is False
+    assert result.error_count == 0
+
+
+def test_run_eslint_skips_node_modules(tmp_path, monkeypatch):
+    # Files inside node_modules should not be passed to eslint
+    node_mod = tmp_path / "node_modules" / "somelib"
+    node_mod.mkdir(parents=True)
+    (node_mod / "index.js").write_text("var x = 1;")
+
+    # No non-node_modules JS files → should not call subprocess at all
+    called = []
+    def fake_run(*args, **kwargs):
+        called.append(True)
+        return MagicMock(stdout="[]", returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = run_eslint(artifact_dir=str(tmp_path))
+    assert not called, "subprocess.run should not be called when only node_modules files exist"
+    assert result.ran is False
