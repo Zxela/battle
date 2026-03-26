@@ -1,6 +1,6 @@
 import json
 import pytest
-from battle.config import Config
+from battle.config import Config, _is_github_shorthand
 
 
 def test_empty_config(tmp_battle_home):
@@ -27,6 +27,14 @@ def test_resolve_absolute_path_passthrough(tmp_battle_home, tmp_path):
     plugin_dir.mkdir()
     cfg = Config()
     assert cfg.resolve(str(plugin_dir)) == str(plugin_dir)
+
+
+def test_github_shorthand_detection():
+    assert _is_github_shorthand("obra/superpowers") is True
+    assert _is_github_shorthand("zxela/claude-plugins") is True
+    assert _is_github_shorthand("/usr/local/superpowers") is False
+    assert _is_github_shorthand("./superpowers") is False
+    assert _is_github_shorthand("superpowers") is False
 
 
 def test_config_persists(tmp_battle_home, tmp_path):

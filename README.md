@@ -29,13 +29,17 @@ This runs 3 cells: `baseline`, `superpowers`, and `homerun`, each on the `spa` t
 
 ## Commands
 
-### `battle register <name> <path>`
+### `battle register <name> <path-or-repo>`
 
-Register a plugin by name and path to its local repo.
+Register a plugin. Accepts either a local path or a `owner/repo` GitHub shorthand — battle will clone it automatically to `~/.battle/plugins/<name>/` and keep it up to date on subsequent registers.
 
 ```bash
+# GitHub shorthand (auto-clone)
+battle register superpowers obra/superpowers
+battle register homerun zxela/claude-plugins
+
+# Local path (pass-through)
 battle register superpowers ~/repos/obra-superpowers
-battle register homerun ~/repos/zxela-homerun
 ```
 
 Entries are stored in `~/.battle/plugins.json`.
