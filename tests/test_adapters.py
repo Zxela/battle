@@ -75,11 +75,11 @@ def test_superpowers_options_has_system_prompt(tmp_path):
     opts = adapter.get_options(model="claude-sonnet-4-6", cwd="/tmp")
     assert opts.system_prompt is not None
     assert "benchmark" in opts.system_prompt.lower()
-    assert "EnterPlanMode" in opts.system_prompt
+    assert "autonomously" in opts.system_prompt.lower()
 
 
 def test_homerun_options_has_system_prompt(tmp_path):
     adapter = HomerunAdapter(plugin_path=str(tmp_path))
     opts = adapter.get_options(model="claude-sonnet-4-6", cwd="/tmp")
     assert opts.system_prompt is not None
-    assert "EnterPlanMode" in opts.system_prompt
+    assert "autonomously" in opts.system_prompt.lower()

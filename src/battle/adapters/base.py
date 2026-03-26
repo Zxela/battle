@@ -3,14 +3,15 @@ from claude_agent_sdk import ClaudeAgentOptions
 
 # System prompt injected into all plugin cells.
 # Superpowers' brainstorming skill has a HARD-GATE requiring user approval
-# before implementation; this overrides it since battle runs are unattended.
-# Per the superpowers skill hierarchy, explicit user/CLAUDE.md instructions
-# take highest priority over skill-level guidance.
+# before proceeding. In an automated benchmark there is no human to respond,
+# so Claude should act as both architect and approver: run through the full
+# brainstorm/plan workflow autonomously, approve its own design, then implement.
 BENCHMARK_SYSTEM = (
-    "You are running in an automated benchmark evaluation. "
-    "Do not use EnterPlanMode or the brainstorming workflow. "
-    "Do not ask for user confirmation, clarification, or plan approval. "
-    "Implement the task fully and immediately using your best judgment."
+    "You are running in an automated benchmark evaluation with no human present. "
+    "When a skill or workflow requires user approval, confirmation, or clarification, "
+    "proceed autonomously — act as both the designer and the approver. "
+    "Complete any brainstorming or planning steps yourself, approve your own plan, "
+    "then implement immediately without waiting for external input."
 )
 
 
