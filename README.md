@@ -16,7 +16,7 @@ Requires Python 3.11+ and a Claude account. Uses your existing Claude Code OAuth
 
 ```bash
 cp .env.example .env
-# Fill in ANTHROPIC_AUTH_TOKEN (get it with: claude config get oauthToken)
+# Fill in CLAUDE_CODE_OAUTH_TOKEN — get it by running: claude setup-token
 source .env
 ```
 
