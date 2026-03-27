@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 
-def _battle_home() -> Path:
+def battle_home() -> Path:
     home = os.environ.get("BATTLE_HOME")
     if home:
         return Path(home)
@@ -19,7 +19,7 @@ def _is_github_shorthand(s: str) -> bool:
 
 class Config:
     def __init__(self):
-        self._home = _battle_home()
+        self._home = battle_home()
         self._home.mkdir(parents=True, exist_ok=True)
         self._path = self._home / "plugins.json"
         self._data: dict[str, str] = {}
@@ -36,9 +36,12 @@ class Config:
             try:
                 marketplace = json.loads(marketplace_path.read_text())
                 for plugin in marketplace.get("plugins", []):
-                    if plugin.get("name") == name or True:  # take first match
+                    if plugin.get("name") == name:
                         source = plugin.get("source", "./").rstrip("/")
                         resolved = (repo_dir / source).resolve()
+                        # Ensure resolved path is within repo_dir (prevent path traversal)
+                        if not str(resolved).startswith(str(repo_dir.resolve())):
+                            raise ValueError(f"Plugin source '{source}' escapes repo directory")
                         return str(resolved)
             except (json.JSONDecodeError, KeyError):
                 pass
@@ -48,12 +51,15 @@ class Config:
         """Clone owner/repo to ~/.battle/plugins/<name>/, or pull if already cloned."""
         plugins_dir = self._home / "plugins"
         plugins_dir.mkdir(parents=True, exist_ok=True)
+        # Validate name contains no path separators or traversal
+        if ".." in name or "/" in name or "\\" in name:
+            raise ValueError(f"Invalid plugin name '{name}': must not contain path separators")
         dest = plugins_dir / name
         if dest.exists():
-            subprocess.run(["git", "-C", str(dest), "pull", "--ff-only"], check=True)
+            subprocess.run(["git", "-C", str(dest), "pull", "--ff-only"], check=True, timeout=120)
         else:
             url = f"https://github.com/{repo}.git"
-            subprocess.run(["git", "clone", url, str(dest)], check=True)
+            subprocess.run(["git", "clone", url, str(dest)], check=True, timeout=120)
         return self._resolve_plugin_source(dest, name)
 
     def register(self, name: str, path: str) -> None:

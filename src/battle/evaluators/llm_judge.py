@@ -1,19 +1,22 @@
+import asyncio
 import json
 from dataclasses import dataclass
 
 from claude_agent_sdk import ClaudeAgentOptions, ResultMessage, query
 
+# Maximum time (seconds) for a judge evaluation
+JUDGE_TIMEOUT = 300
+
 JUDGE_PROMPT = """\
-You are an expert code reviewer evaluating AI-generated code. Score the output on each dimension from 1 (very poor) to 10 (excellent).
+You are an expert code reviewer evaluating AI-generated code. You are in the directory containing the generated code. Use your tools to explore the files and understand what was built.
 
 ## Task Acceptance Criteria
 {criteria}
 
-## Generated Code
-{code_summary}
-
 ## Instructions
-Score on each dimension, then provide a brief rationale. Be calibrated — a score of 10 is exceptional. Respond ONLY with valid JSON matching this schema:
+Explore the code in this directory thoroughly, then score it on each dimension from 1 (very poor) to 10 (excellent). Be calibrated — a score of 10 is exceptional.
+
+Respond ONLY with valid JSON matching this schema:
 {{
   "ac_completeness": <1-10>,
   "code_style": <1-10>,
@@ -50,52 +53,78 @@ class RubricScore:
 
 
 async def score_cell(
-    artifact_files: dict[str, str],
+    artifact_dir: str,
     acceptance_criteria: list[str],
     judge_model: str = "claude-opus-4-6",
 ) -> RubricScore:
-    """Score a cell's artifacts against the rubric using Claude as judge."""
-    if not artifact_files:
-        code_summary = "No files were generated."
-    else:
-        parts = [f"Files generated: {list(artifact_files.keys())}\n"]
-        total_chars = 0
-        for path, content in artifact_files.items():
-            chunk = f"\n### {path}\n```\n{content[:2000]}\n```"
-            if total_chars + len(chunk) > 8000:
-                parts.append("\n[... additional files truncated ...]")
-                break
-            parts.append(chunk)
-            total_chars += len(chunk)
-        code_summary = "".join(parts)
-
+    """Score a cell's artifacts by running Claude Code in the artifact directory."""
     criteria_text = "\n".join(f"- {c}" for c in acceptance_criteria)
-    prompt = JUDGE_PROMPT.format(criteria=criteria_text, code_summary=code_summary)
+    prompt = JUDGE_PROMPT.format(criteria=criteria_text)
+
+    # If no artifact dir or empty, short-circuit with minimum scores
+    if not artifact_dir:
+        return RubricScore(
+            ac_completeness=1, code_style=1, code_quality=1,
+            security=1, bugs=1, rationale="No artifact directory provided.",
+        )
+
+    output_schema = {
+        "type": "object",
+        "properties": {
+            "ac_completeness": {"type": "number"},
+            "code_style": {"type": "number"},
+            "code_quality": {"type": "number"},
+            "security": {"type": "number"},
+            "bugs": {"type": "number"},
+            "rationale": {"type": "string"},
+        },
+        "required": ["ac_completeness", "code_style", "code_quality", "security", "bugs", "rationale"],
+    }
 
     options = ClaudeAgentOptions(
+        cwd=artifact_dir,
         model=judge_model,
         permission_mode="bypassPermissions",
-        allowed_tools=[],
+        allowed_tools=["Read", "Glob", "Grep", "Bash"],
+        output_format={"type": "json_schema", "schema": output_schema},
     )
 
     text = ""
-    async for message in query(prompt=prompt, options=options):
-        if isinstance(message, ResultMessage):
-            text = message.result or ""
+    structured = None
 
-    # Strip markdown code fences if present
-    text = text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    data = json.loads(text.strip())
+    async def _run_judge() -> None:
+        nonlocal text, structured
+        async for message in query(prompt=prompt, options=options):
+            if isinstance(message, ResultMessage):
+                text = message.result or ""
+                structured = message.structured_output
+
+    await asyncio.wait_for(_run_judge(), timeout=JUDGE_TIMEOUT)
+
+    # Prefer structured output from SDK if available
+    if structured and isinstance(structured, dict):
+        data = structured
+    else:
+        # Fallback: parse text response
+        text = text.strip()
+        if not text:
+            raise ValueError("Judge returned empty response")
+        if text.startswith("```"):
+            parts = text.split("```")
+            if len(parts) >= 2:
+                text = parts[1]
+                if text.lower().startswith("json"):
+                    text = text[4:]
+        data = json.loads(text.strip())
+
+    def clamp(val: float) -> float:
+        return max(1.0, min(10.0, val))
 
     return RubricScore(
-        ac_completeness=float(data["ac_completeness"]),
-        code_style=float(data["code_style"]),
-        code_quality=float(data["code_quality"]),
-        security=float(data["security"]),
-        bugs=float(data["bugs"]),
-        rationale=data["rationale"],
+        ac_completeness=clamp(float(data["ac_completeness"])),
+        code_style=clamp(float(data["code_style"])),
+        code_quality=clamp(float(data["code_quality"])),
+        security=clamp(float(data["security"])),
+        bugs=clamp(float(data["bugs"])),
+        rationale=str(data["rationale"]),
     )

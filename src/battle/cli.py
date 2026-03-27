@@ -1,12 +1,9 @@
 import argparse
 import asyncio
-import json
-import os
-import sys
 from pathlib import Path
 
 from .config import Config
-from .evaluators.llm_judge import score_cell
+from .evaluators.llm_judge import RubricScore, score_cell
 from .evaluators.static import run_eslint
 from .orchestrator import MatrixConfig, run_matrix
 from .output import manifest_to_html, manifest_to_json, print_results
@@ -31,6 +28,7 @@ def cli_list() -> None:
         print(f"  {name}: {path} {exists}")
 
 
+
 def cli_run(
     plugins: list[str],
     models: list[str],
@@ -40,14 +38,22 @@ def cli_run(
     output: str,
     ci: bool = False,
     threshold: float = 6.0,
+    sequential: bool = False,
 ) -> None:
     cfg = Config()
     template = get_template(test_name)
 
+    # Filter out 'baseline' — it's always auto-included by the orchestrator
+    plugins = [p for p in plugins if p != "baseline"]
+
     # Resolve plugin paths
     plugin_paths = {}
     for name in plugins:
-        plugin_paths[name] = cfg.resolve(name)
+        try:
+            plugin_paths[name] = cfg.resolve(name)
+        except KeyError:
+            print(f"Error: Plugin '{name}' not registered. Run: battle register {name} <path-or-repo>")
+            return
 
     storage = RunStorage()
     run_id = storage.new_run(
@@ -57,7 +63,8 @@ def cli_run(
     )
     artifact_dir = storage.artifact_dir(run_id)
 
-    print(f"Starting battle run {run_id}")
+    mode = "sequential" if sequential else "parallel"
+    print(f"Starting battle run {run_id} ({mode})")
     print(f"Plugins: {plugins + ['baseline']}  Models: {models}  Runs/cell: {runs}")
 
     matrix_config = MatrixConfig(
@@ -70,24 +77,23 @@ def cli_run(
     )
 
     async def _run_and_evaluate() -> None:
-        results = await run_matrix(matrix_config)
+        results = await run_matrix(matrix_config, sequential=sequential)
         print(f"Completed {len(results)} cells. Evaluating...")
         for cell in results:
-            cell_artifact_dir = cell.artifact_dir
-            artifact_files: dict[str, str] = {}
-            if cell_artifact_dir and os.path.isdir(cell_artifact_dir):
-                for rel in cell.artifact_files:
-                    full = os.path.join(cell_artifact_dir, rel)
-                    try:
-                        artifact_files[rel] = open(full).read()
-                    except Exception:
-                        pass
-            rubric = await score_cell(
-                artifact_files=artifact_files,
-                acceptance_criteria=template.acceptance_criteria,
-                judge_model=judge_model,
-            )
-            static = run_eslint(artifact_dir=cell_artifact_dir or "")
+            try:
+                rubric = await score_cell(
+                    artifact_dir=cell.artifact_dir,
+                    acceptance_criteria=template.acceptance_criteria,
+                    judge_model=judge_model,
+                )
+            except Exception as e:
+                print(f"  Judge failed for {cell.plugin_id}/{cell.model}: {e}")
+                rubric = RubricScore(
+                    ac_completeness=1, code_style=1, code_quality=1,
+                    security=1, bugs=1, rationale=f"Judge error: {e}",
+                )
+
+            static = run_eslint(artifact_dir=cell.artifact_dir or "")
             storage.record_cell(run_id, cell, rubric, static)
 
     asyncio.run(_run_and_evaluate())
@@ -153,7 +159,7 @@ def main() -> None:
 
     # battle run (default)
     run_p = subparsers.add_parser("run", help="Run a battle")
-    run_p.add_argument("--plugins", required=True, help="Comma-separated plugin names or paths")
+    run_p.add_argument("--plugins", default="", help="Comma-separated plugin names or paths (baseline always included)")
     run_p.add_argument("--models", default="claude-sonnet-4-6", help="Comma-separated model IDs")
     run_p.add_argument("--test", default="spa", help="Test template name (spa, mobile, tooling)")
     run_p.add_argument("--runs", type=int, default=1, help="Runs per cell (default: 1)")
@@ -161,16 +167,18 @@ def main() -> None:
     run_p.add_argument("--output", default="all", help="Output formats: terminal,html,json or all")
     run_p.add_argument("--ci", action="store_true", help="Exit non-zero if any cell scores below --threshold")
     run_p.add_argument("--threshold", type=float, default=6.0, help="Minimum acceptable overall score (default: 6.0)")
+    run_p.add_argument("--sequential", action="store_true", help="Run cells one at a time instead of in parallel")
 
     # Allow `battle --plugins ...` as shorthand for `battle run --plugins ...`
     parser.add_argument("--plugins", help="Comma-separated plugin names or paths (shorthand for 'battle run')")
-    parser.add_argument("--models", help=argparse.SUPPRESS)
+    parser.add_argument("--models", default="claude-sonnet-4-6", help=argparse.SUPPRESS)
     parser.add_argument("--test", help=argparse.SUPPRESS, default="spa")
     parser.add_argument("--runs", type=int, help=argparse.SUPPRESS, default=1)
     parser.add_argument("--judge-model", help=argparse.SUPPRESS, default="claude-opus-4-6")
     parser.add_argument("--output", help=argparse.SUPPRESS, default="all")
     parser.add_argument("--ci", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--threshold", type=float, help=argparse.SUPPRESS, default=6.0)
+    parser.add_argument("--sequential", action="store_true", help=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
@@ -183,6 +191,14 @@ def main() -> None:
         models = [m.strip() for m in args.models.split(",")]
         cli_run(plugins, models, args.test, args.runs, args.judge_model, args.output,
                 ci=args.ci, threshold=args.threshold)
+    elif args.command == "run" or (args.command is None and args.plugins is not None):
+        plugins = [p.strip() for p in args.plugins.split(",") if p.strip()] if args.plugins else []
+        models = [m.strip() for m in args.models.split(",") if m.strip()]
+        if not models:
+            parser.error("--models must specify at least one model")
+        if args.runs < 1:
+            parser.error("--runs must be at least 1")
+        cli_run(plugins, models, args.test, args.runs, args.judge_model, args.output, args.sequential)
     else:
         parser.print_help()
 

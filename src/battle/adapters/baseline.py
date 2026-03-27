@@ -1,5 +1,5 @@
 from claude_agent_sdk import ClaudeAgentOptions
-from .base import PluginAdapter, register_adapter
+from .base import BENCHMARK_SYSTEM, PluginAdapter, register_adapter
 
 
 @register_adapter
@@ -14,6 +14,7 @@ class BaselineAdapter(PluginAdapter):
         return ClaudeAgentOptions(
             cwd=cwd,
             model=model,
+            system_prompt=BENCHMARK_SYSTEM,
             permission_mode="bypassPermissions",
             allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
         )

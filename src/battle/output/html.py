@@ -1,7 +1,7 @@
 import json
 import html as _html
 from dataclasses import asdict
-from battle.storage import RunManifest
+from ..storage import RunManifest
 
 
 def manifest_to_html(manifest: RunManifest) -> str:
@@ -83,28 +83,37 @@ function avg(cells, fn) {{
 const tbody = document.getElementById('results-body');
 const details = document.getElementById('details');
 
+function td(text, className) {{
+  const el = document.createElement('td');
+  el.textContent = text;
+  if (className) el.className = className;
+  return el;
+}}
+
 for (const [key, cells] of Object.entries(groups)) {{
   const [plugin_id, model] = key.split('|');
   const ov = avg(cells, overall);
   const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td class="plugin">${{plugin_id}}</td>
-    <td>${{model}}</td>
-    <td class="${{scoreClass(ov)}}">${{ov.toFixed(1)}}</td>
-    <td>${{avg(cells, c => c.rubric.ac_completeness).toFixed(1)}}</td>
-    <td>${{avg(cells, c => c.rubric.code_style).toFixed(1)}}</td>
-    <td>${{avg(cells, c => c.rubric.code_quality).toFixed(1)}}</td>
-    <td>${{avg(cells, c => c.rubric.security).toFixed(1)}}</td>
-    <td>${{avg(cells, c => c.rubric.bugs).toFixed(1)}}</td>
-    <td>${{Math.round(avg(cells, c => c.static.error_count))}}</td>
-    <td class="cost">$${{avg(cells, c => c.cost_usd).toFixed(3)}}</td>
-  `;
+  tr.appendChild(td(plugin_id, 'plugin'));
+  tr.appendChild(td(model));
+  tr.appendChild(td(ov.toFixed(1), scoreClass(ov)));
+  tr.appendChild(td(avg(cells, c => c.rubric.ac_completeness).toFixed(1)));
+  tr.appendChild(td(avg(cells, c => c.rubric.code_style).toFixed(1)));
+  tr.appendChild(td(avg(cells, c => c.rubric.code_quality).toFixed(1)));
+  tr.appendChild(td(avg(cells, c => c.rubric.security).toFixed(1)));
+  tr.appendChild(td(avg(cells, c => c.rubric.bugs).toFixed(1)));
+  tr.appendChild(td(String(Math.round(avg(cells, c => c.static.error_count)))));
+  tr.appendChild(td('$' + avg(cells, c => c.cost_usd).toFixed(3), 'cost'));
   tbody.appendChild(tr);
 
   // Details section
   const section = document.createElement('details');
-  section.innerHTML = `<summary>${{plugin_id}} × ${{model}} — ${{cells.length}} run(s)</summary>
-    <pre>${{cells.map(c => JSON.stringify(c.rubric, null, 2)).join('\\n---\\n')}}</pre>`;
+  const summary = document.createElement('summary');
+  summary.textContent = plugin_id + ' \u00d7 ' + model + ' \u2014 ' + cells.length + ' run(s)';
+  const pre = document.createElement('pre');
+  pre.textContent = cells.map(c => JSON.stringify(c.rubric, null, 2)).join('\\n---\\n');
+  section.appendChild(summary);
+  section.appendChild(pre);
   details.appendChild(section);
 }}
 </script>

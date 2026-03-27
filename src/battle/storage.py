@@ -1,11 +1,12 @@
 import json
 import os
+import tempfile
 import time
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .config import _battle_home
+from .config import battle_home
 from .evaluators.llm_judge import RubricScore
 from .evaluators.static import StaticResult
 from .runner import CellResult
@@ -24,7 +25,7 @@ class RunManifest:
 
 class RunStorage:
     def __init__(self):
-        self._runs_dir = _battle_home() / "runs"
+        self._runs_dir = battle_home() / "runs"
         self._runs_dir.mkdir(parents=True, exist_ok=True)
 
     def new_run(self, plugin_names: list[str], models: list[str], test_name: str) -> str:
@@ -80,4 +81,12 @@ class RunStorage:
 
     def _write_manifest(self, run_id: str, manifest: RunManifest) -> None:
         path = self._runs_dir / run_id / "manifest.json"
-        path.write_text(json.dumps(asdict(manifest), indent=2))
+        # Atomic write: write to temp file then rename
+        fd, tmp_path = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(asdict(manifest), f, indent=2)
+            os.replace(tmp_path, path)
+        except BaseException:
+            os.unlink(tmp_path)
+            raise

@@ -1,54 +1,55 @@
-# battle
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.11+"/>
+  <img src="https://img.shields.io/badge/Claude_Code-SDK-D97757?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgMkw0IDdWMTdMMTIgMjJMMjAgMTdWN0wxMiAyWiIgZmlsbD0id2hpdGUiLz48L3N2Zz4=&logoColor=white" alt="Claude Code SDK"/>
+  <img src="https://img.shields.io/badge/license-MIT-22c55e?style=for-the-badge" alt="MIT License"/>
+  <img src="https://img.shields.io/badge/async-parallel-8B5CF6?style=for-the-badge" alt="Async Parallel"/>
+</p>
 
-Benchmark Claude Code plugins head-to-head. Run a matrix of `(plugin × model)` combinations on the same task, score each output with LLM-as-judge + static analysis, and get a terminal table, HTML report, and JSON.
+<h1 align="center">battle</h1>
+
+<p align="center">
+  <strong>Benchmark Claude Code plugins head-to-head.</strong><br/>
+  Same task. Same model. Same judge. Different plugins.
+</p>
+
+<p align="center">
+  <code>battle</code> runs a matrix of <code>(plugin × model)</code> combinations on standardized coding tasks,<br/>
+  scores each output with LLM-as-judge + static analysis, and produces terminal, HTML, and JSON reports.
+</p>
+
+---
 
 ## Why
 
-Plugin selection for Claude Code feels subjective. `battle` makes it objective — same task, same model, same judge, different plugins. A no-plugin baseline is always included as a control.
-
-## Install
-
-```bash
-pip install -e .
-```
-
-Requires Python 3.11+ and a Claude account. Uses your existing Claude Code OAuth session — no API key needed.
-
-```bash
-cp .env.example .env
-# Fill in CLAUDE_CODE_OAUTH_TOKEN — get it by running: claude setup-token
-source .env
-```
+Plugin selection for Claude Code feels subjective. `battle` makes it objective — every plugin gets the same prompt, the same model, and the same rubric. A no-plugin **baseline** is always included as a control.
 
 ## Quick start
 
 ```bash
-# Register your plugins by pointing at their local repos
-battle register superpowers /path/to/superpowers
-battle register homerun /path/to/homerun
+# Install
+make install
+source .venv/bin/activate
+
+# Register plugins (local path or GitHub shorthand)
+battle register superpowers obra/superpowers
+battle register homerun zxela/claude-plugins
 
 # Run a battle
 battle run --plugins superpowers,homerun --models claude-sonnet-4-6 --test spa
 ```
 
-This runs 3 cells: `baseline`, `superpowers`, and `homerun`, each on the `spa` test, 3 runs per cell (averaged). Results print to terminal, plus `report.html` and `report.json` in `~/.battle/runs/<run-id>/`.
+Uses your existing Claude Code OAuth session — no API key needed. Get a token with `claude setup-token`.
 
 ## Commands
 
 ### `battle register <name> <path-or-repo>`
 
-Register a plugin. Accepts either a local path or a `owner/repo` GitHub shorthand — battle will clone it automatically to `~/.battle/plugins/<name>/` and keep it up to date on subsequent registers.
+Register a plugin. Accepts a local path or `owner/repo` GitHub shorthand (auto-cloned to `~/.battle/plugins/`).
 
 ```bash
-# GitHub shorthand (auto-clone)
-battle register superpowers obra/superpowers
-battle register homerun zxela/claude-plugins
-
-# Local path (pass-through)
-battle register superpowers ~/repos/obra-superpowers
+battle register superpowers ~/repos/obra-superpowers   # local
+battle register superpowers obra/superpowers            # GitHub
 ```
-
-Entries are stored in `~/.battle/plugins.json`.
 
 ### `battle list`
 
@@ -60,12 +61,12 @@ Run a benchmark matrix.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--plugins` | required | Comma-separated plugin names or absolute paths |
+| `--plugins` | *required* | Comma-separated plugin names or paths |
 | `--models` | `claude-sonnet-4-6` | Comma-separated model IDs |
-| `--test` | `spa` | Task template: `spa`, `mobile`, `tooling` |
-| `--runs` | `3` | Runs per cell (averaged for final scores) |
+| `--test` | `spa` | Task template (see below) |
+| `--runs` | `1` | Runs per cell (averaged) |
 | `--judge-model` | `claude-opus-4-6` | Model used as judge |
-| `--output` | `all` | Output formats: `terminal`, `html`, `json`, or `all` |
+| `--output` | `all` | `terminal`, `html`, `json`, or `all` |
 
 Shorthand — `--plugins` at the top level routes to `run`:
 
@@ -75,26 +76,26 @@ battle --plugins superpowers --models claude-sonnet-4-6,claude-opus-4-6
 
 ## Test templates
 
-| Name | Description |
-|---|---|
-| `spa` | React + Vite + TypeScript SPA with routing, contact form, validation, API call |
-| `mobile` | Expo React Native app with navigation and fetched post list |
-| `tooling` | TypeScript `wordcount` CLI with stdin support and Jest tests |
-| `api` | Express + TypeScript REST API with Zod validation and Jest tests |
+| Name | Stack | What it builds |
+|---|---|---|
+| **`spa`** | React + Vite + TypeScript | SPA with routing, contact form, validation, API call |
+| **`mobile`** | Expo + React Native | App with navigation and fetched post list |
+| **`tooling`** | Node.js + Commander + Jest | `wordcount` CLI with stdin support and tests |
+| **`api`** | Express + TypeScript + Zod + Jest | REST API with CRUD, validation, and tests |
 
 ## Scoring
 
-Each cell is scored by Claude (LLM-as-judge) across 5 dimensions, each 0–10:
+Each cell is scored by Claude (LLM-as-judge) across **5 dimensions**, each 0–10:
 
-- **AC completeness** — does the output satisfy every acceptance criterion?
-- **Code style** — idiomatic, consistent, readable?
-- **Code quality** — architecture, separation of concerns, maintainability?
-- **Security** — no obvious vulnerabilities?
-- **Bugs** — does it actually work?
+| Dimension | What it measures |
+|---|---|
+| **AC completeness** | Does the output satisfy every acceptance criterion? |
+| **Code style** | Idiomatic, consistent, readable? |
+| **Code quality** | Architecture, separation of concerns, maintainability? |
+| **Security** | No obvious vulnerabilities? |
+| **Bugs** | Does it actually work? |
 
-Static analysis (ESLint) runs on any generated JS/TS and reports error + warning counts.
-
-Multiple runs per cell are averaged. The terminal table color-codes the overall score: green ≥ 8, yellow ≥ 6, red < 6.
+Static analysis (ESLint) runs on generated JS/TS and reports error + warning counts. Multiple runs per cell are averaged. The terminal table color-codes scores: **green** >= 8, **yellow** >= 6, **red** < 6.
 
 ## Artifacts
 
@@ -102,10 +103,10 @@ Every run is stored under `~/.battle/runs/<timestamp>-<hash>/`:
 
 ```
 ~/.battle/runs/1711234567-a1b2c3d4/
-├── manifest.json       # scores, costs, metadata for every cell
+├── manifest.json       # scores, costs, metadata
 ├── report.html         # self-contained HTML report
 ├── report.json         # full manifest as JSON
-└── artifacts/          # generated code from every cell
+└── artifacts/
     ├── baseline-claude-sonnet-4-6-0/
     ├── superpowers-claude-sonnet-4-6-0/
     └── homerun-claude-sonnet-4-6-0/
@@ -114,26 +115,24 @@ Every run is stored under `~/.battle/runs/<timestamp>-<hash>/`:
 ## Architecture
 
 ```
-battle/
-├── src/battle/
-│   ├── cli.py              # Entry point (argparse)
-│   ├── config.py           # ~/.battle/plugins.json registry
-│   ├── adapters/           # PluginAdapter ABC + baseline/superpowers/homerun
-│   ├── runner.py           # run_cell() coroutine → CellResult
-│   ├── orchestrator.py     # run_matrix() → asyncio.gather() over all cells
-│   ├── tests/              # Task prompt templates (spa, mobile, tooling)
-│   ├── evaluators/
-│   │   ├── llm_judge.py    # Claude-as-judge → RubricScore
-│   │   └── static.py       # ESLint runner → StaticResult
-│   ├── storage.py          # RunStorage + RunManifest persistence
-│   └── output/
-│       ├── terminal.py     # Rich table
-│       ├── html.py         # Self-contained HTML report
-│       └── json_out.py     # JSON serialization
-└── tests/                  # 47 tests
+src/battle/
+├── cli.py              # Entry point (argparse)
+├── config.py           # Plugin registry (~/.battle/plugins.json)
+├── runner.py           # run_cell() → CellResult
+├── orchestrator.py     # run_matrix() → asyncio.gather() over all cells
+├── adapters/           # PluginAdapter ABC + baseline/superpowers/homerun
+├── tests/              # Task prompt templates
+├── evaluators/
+│   ├── llm_judge.py    # Claude-as-judge → RubricScore
+│   └── static.py       # ESLint → StaticResult
+├── storage.py          # RunStorage + RunManifest
+└── output/
+    ├── terminal.py     # Rich table
+    ├── html.py         # Self-contained HTML report
+    └── json_out.py     # JSON export
 ```
 
-All cells run in parallel via `asyncio.gather()`. Each cell gets an isolated temp directory; artifacts are copied to permanent storage after the session completes.
+All cells run in parallel via `asyncio.gather()`. Each cell gets an isolated temp directory; artifacts are copied to permanent storage after completion.
 
 ## CI Integration
 
@@ -205,6 +204,13 @@ The `report.json` produced by `--output json` (or `all`) contains the full run m
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-pytest -v
+make install        # Create venv, install with dev deps
+make test           # Run tests
+make lint           # Run ruff
+make build          # Build wheel + sdist
+make clean          # Remove artifacts and venv
 ```
+
+## License
+
+MIT

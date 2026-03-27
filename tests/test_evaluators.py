@@ -11,16 +11,19 @@ def _json_str(ac=8, style=7, quality=7, security=9, bugs=8, rationale="Good"):
     })
 
 
-async def test_score_cell_returns_rubric_score():
+async def test_score_cell_returns_rubric_score(tmp_path):
+    (tmp_path / "index.tsx").write_text("export default function App() {}")
+
     async def fake_query(prompt, options):
         from claude_agent_sdk import ResultMessage
         msg = MagicMock(spec=ResultMessage)
         msg.result = _json_str()
+        msg.structured_output = None
         yield msg
 
     with patch("battle.evaluators.llm_judge.query", fake_query):
         score = await score_cell(
-            artifact_files={"index.tsx": "export default function App() {}"},
+            artifact_dir=str(tmp_path),
             acceptance_criteria=["App renders without errors"],
             judge_model="claude-opus-4-6",
         )
@@ -29,34 +32,39 @@ async def test_score_cell_returns_rubric_score():
     assert score.overall == pytest.approx((8 + 7 + 7 + 9 + 8) / 5, rel=0.01)
 
 
-async def test_score_cell_handles_empty_artifacts():
+async def test_score_cell_handles_empty_artifacts(tmp_path):
+    # Empty directory — no files written
+
     async def fake_query(prompt, options):
         from claude_agent_sdk import ResultMessage
         msg = MagicMock(spec=ResultMessage)
         msg.result = _json_str(ac=1, style=1, quality=1, security=1, bugs=1, rationale="No code")
+        msg.structured_output = None
         yield msg
 
     with patch("battle.evaluators.llm_judge.query", fake_query):
         score = await score_cell(
-            artifact_files={},
+            artifact_dir=str(tmp_path),
             acceptance_criteria=["Build completes"],
             judge_model="claude-opus-4-6",
         )
     assert score.overall < 5
 
 
-async def test_score_cell_strips_markdown_fences():
+async def test_score_cell_strips_markdown_fences(tmp_path):
+    (tmp_path / "app.py").write_text("print('hello')")
     fenced = "```json\n" + _json_str(ac=7, style=7, quality=7, security=7, bugs=7, rationale="Avg") + "\n```"
 
     async def fake_query(prompt, options):
         from claude_agent_sdk import ResultMessage
         msg = MagicMock(spec=ResultMessage)
         msg.result = fenced
+        msg.structured_output = None
         yield msg
 
     with patch("battle.evaluators.llm_judge.query", fake_query):
         score = await score_cell(
-            artifact_files={"app.py": "print('hello')"},
+            artifact_dir=str(tmp_path),
             acceptance_criteria=["Runs without errors"],
         )
     assert score.ac_completeness == 7

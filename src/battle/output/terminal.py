@@ -2,13 +2,13 @@ from collections import defaultdict
 from rich.console import Console
 from rich.table import Table
 from rich import box
-from battle.storage import RunManifest
+from ..storage import RunManifest
 
 
 def _overall(cell: dict) -> float:
-    r = cell["rubric"]
-    return (r["ac_completeness"] + r["code_style"] + r["code_quality"]
-            + r["security"] + r["bugs"]) / 5
+    r = cell.get("rubric", {})
+    return (r.get("ac_completeness", 0) + r.get("code_style", 0) + r.get("code_quality", 0)
+            + r.get("security", 0) + r.get("bugs", 0)) / 5
 
 
 def print_results(manifest: RunManifest) -> None:
@@ -46,13 +46,13 @@ def print_results(manifest: RunManifest) -> None:
             plugin_id,
             model,
             f"[{color}]{overall:.1f}[/{color}]",
-            f"{avg(lambda c: c['rubric']['ac_completeness']):.1f}",
-            f"{avg(lambda c: c['rubric']['code_style']):.1f}",
-            f"{avg(lambda c: c['rubric']['code_quality']):.1f}",
-            f"{avg(lambda c: c['rubric']['security']):.1f}",
-            f"{avg(lambda c: c['rubric']['bugs']):.1f}",
-            str(int(avg(lambda c: c['static']['error_count']))),
-            f"${avg(lambda c: c['cost_usd']):.3f}",
+            f"{avg(lambda c: c.get('rubric', {}).get('ac_completeness', 0)):.1f}",
+            f"{avg(lambda c: c.get('rubric', {}).get('code_style', 0)):.1f}",
+            f"{avg(lambda c: c.get('rubric', {}).get('code_quality', 0)):.1f}",
+            f"{avg(lambda c: c.get('rubric', {}).get('security', 0)):.1f}",
+            f"{avg(lambda c: c.get('rubric', {}).get('bugs', 0)):.1f}",
+            str(int(avg(lambda c: c.get('static', {}).get('error_count', 0)))),
+            f"${avg(lambda c: c.get('cost_usd', 0)):.3f}",
         )
 
     console.print(table)

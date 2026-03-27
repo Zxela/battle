@@ -1,3 +1,4 @@
+import asyncio
 import os
 import shutil
 import tempfile
@@ -6,6 +7,9 @@ from dataclasses import dataclass, field
 from claude_agent_sdk import query, ResultMessage
 
 from .adapters.base import PluginAdapter
+
+# Maximum time (seconds) for a single cell run
+CELL_TIMEOUT = 600
 
 
 @dataclass
@@ -38,17 +42,25 @@ async def run_cell(
         error = None
 
         try:
-            async for message in query(prompt=prompt, options=options):
-                if isinstance(message, ResultMessage):
-                    result_text = message.result or ""
-                    cost_usd = message.total_cost_usd or 0.0
-                    num_turns = message.num_turns or 0
+            async def _run_query() -> None:
+                nonlocal result_text, cost_usd, num_turns
+                async for message in query(prompt=prompt, options=options):
+                    if isinstance(message, ResultMessage):
+                        result_text = message.result or ""
+                        cost_usd = message.total_cost_usd or 0.0
+                        num_turns = message.num_turns or 0
+
+            await asyncio.wait_for(_run_query(), timeout=CELL_TIMEOUT)
+        except asyncio.TimeoutError:
+            error = f"Cell timed out after {CELL_TIMEOUT}s"
         except Exception as e:
             error = str(e)
 
-        # Collect artifact files (relative paths)
+        # Collect artifact files (relative paths), skipping vendored dirs
+        skip_dirs = {"node_modules", ".git", "__pycache__", ".next", ".cache"}
         artifact_files: list[str] = []
-        for root, _, files in os.walk(cwd):
+        for root, dirs, files in os.walk(cwd):
+            dirs[:] = [d for d in dirs if d not in skip_dirs]
             for f in files:
                 full = os.path.join(root, f)
                 rel = os.path.relpath(full, cwd)
@@ -63,7 +75,7 @@ async def run_cell(
             )
             os.makedirs(dest, exist_ok=True)
             if artifact_files:
-                shutil.copytree(cwd, dest, dirs_exist_ok=True)
+                shutil.copytree(cwd, dest, symlinks=True, dirs_exist_ok=True)
             artifact_dir = dest
 
         return CellResult(

@@ -14,6 +14,9 @@ class StaticResult:
 
 def run_eslint(artifact_dir: str) -> StaticResult:
     """Run ESLint on all JS/TS files in artifact_dir. Returns counts."""
+    if not artifact_dir or not os.path.isdir(artifact_dir):
+        return StaticResult(error_count=0, warning_count=0, ran=False)
+
     js_extensions = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
     js_files = [
         os.path.join(root, f)
@@ -26,11 +29,14 @@ def run_eslint(artifact_dir: str) -> StaticResult:
     if not js_files:
         return StaticResult(error_count=0, warning_count=0, ran=False)
 
+    # Prevent option injection from filenames starting with '-'
+    safe_files = [f if not f.startswith("-") else "./" + f for f in js_files]
+
     try:
         result = subprocess.run(
             ["npx", "eslint", "--format=json", "--no-eslintrc",
              "--rule", '{"no-undef":"warn","no-unused-vars":"warn","no-console":"off"}',
-             *js_files],
+             "--", *safe_files],
             capture_output=True,
             text=True,
             timeout=60,

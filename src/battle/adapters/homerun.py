@@ -5,7 +5,7 @@ from .base import BENCHMARK_SYSTEM, PluginAdapter, register_adapter
 @register_adapter
 class HomerunAdapter(PluginAdapter):
 
-    def __init__(self, plugin_path: str):
+    def __init__(self, plugin_path: str = ""):
         self._path = plugin_path
 
     @property

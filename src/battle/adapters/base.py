@@ -32,8 +32,16 @@ _ADAPTER_REGISTRY: dict[str, type[PluginAdapter]] = {}
 
 
 def register_adapter(cls: type[PluginAdapter]) -> type[PluginAdapter]:
-    """Class decorator to register an adapter."""
-    _ADAPTER_REGISTRY[cls.__name__] = cls
+    """Class decorator to register an adapter.
+
+    Instantiates with no args to extract plugin_id for the lookup table.
+    """
+    try:
+        instance = cls()
+        _ADAPTER_REGISTRY[instance.plugin_id] = cls
+    except Exception as exc:
+        import warnings
+        warnings.warn(f"Failed to register adapter {cls.__name__}: {exc}")
     return cls
 
 
@@ -65,20 +73,11 @@ def get_adapter(name: str, plugin_path: str | None) -> PluginAdapter:
     Falls back to GenericPluginAdapter for any name not covered by a registered
     adapter, as long as a plugin_path is provided.
     """
-    id_map = {}
-    for cls in _ADAPTER_REGISTRY.values():
-        try:
-            if plugin_path is not None:
-                instance = cls(plugin_path=plugin_path)
-            else:
-                instance = cls()
-            id_map[instance.plugin_id] = cls
-        except Exception:
-            pass
-
-    if name in id_map:
-        cls = id_map[name]
-        return cls(plugin_path=plugin_path) if plugin_path is not None else cls()
+    if name in _ADAPTER_REGISTRY:
+        cls = _ADAPTER_REGISTRY[name]
+        if plugin_path is not None:
+            return cls(plugin_path=plugin_path)
+        return cls()
 
     # Fall back to generic adapter when a path is available
     if plugin_path is not None:
@@ -86,5 +85,5 @@ def get_adapter(name: str, plugin_path: str | None) -> PluginAdapter:
 
     raise ValueError(
         f"Unknown adapter '{name}' and no plugin_path provided. "
-        f"Registered: {list(id_map)}"
+        f"Registered: {list(_ADAPTER_REGISTRY)}"
     )

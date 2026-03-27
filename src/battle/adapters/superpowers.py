@@ -5,7 +5,7 @@ from .base import BENCHMARK_SYSTEM, PluginAdapter, register_adapter
 @register_adapter
 class SuperpowersAdapter(PluginAdapter):
 
-    def __init__(self, plugin_path: str):
+    def __init__(self, plugin_path: str = ""):
         self._path = plugin_path
 
     @property
@@ -19,5 +19,5 @@ class SuperpowersAdapter(PluginAdapter):
             system_prompt=BENCHMARK_SYSTEM,
             plugins=[{"type": "local", "path": self._path}],
             permission_mode="bypassPermissions",
-            allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Skill"],
+            allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Skill", "Agent", "TaskCreate", "TaskUpdate"],
         )

@@ -1,6 +1,6 @@
 import json
 from dataclasses import asdict
-from battle.storage import RunManifest
+from ..storage import RunManifest
 
 
 def manifest_to_json(manifest: RunManifest) -> str:
